@@ -1,54 +1,32 @@
 const db = require('../config/db');
 const Message = require('../models/messageModel');
 
-// 1. Explicit Registration Flow (Sign Up)
-exports.registerUser = (req, res) => {
+exports.loginOrRegister = (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required.' });
   }
-
   const trimmedUser = username.trim();
 
-  // Check if username is already taken
-  db.get(`SELECT * FROM users WHERE username = ?`, [trimmedUser], (err, user) => {
-    if (err) return res.status(500).json({ error: 'Database verification failure.' });
+  try {
+    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(trimmedUser);
+
     if (user) {
-      return res.status(400).json({ error: 'Username is already taken.' });
-    }
-
-    // Insert new user
-    db.run(`INSERT INTO users (username, password) VALUES (?, ?)`, [trimmedUser, password], (err) => {
-      if (err) return res.status(500).json({ error: 'Failed to create user account.' });
-      return res.status(201).json({ success: true, message: 'Registration successful! You can now log in.' });
-    });
-  });
-};
-
-// 2. Strict Login Flow (Log In)
-exports.loginUser = (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Username and password are required.' });
-  }
-
-  db.get(`SELECT * FROM users WHERE username = ?`, [username.trim()], (err, user) => {
-    if (err) return res.status(500).json({ error: 'Database lookup failure.' });
-    
-    // If user does not exist
-    if (!user) {
-      return res.status(401).json({ error: 'Account does not exist. Please sign up first.' });
-    }
-
-    // Validate password match
-    if (user.password === password) {
-      return res.json({ success: true, username: user.username });
+      if (user.password === password) {
+        return res.json({ success: true, username: user.username });
+      } else {
+        return res.status(401).json({ error: 'Invalid password for this user.' });
+      }
     } else {
-      return res.status(401).json({ error: 'Incorrect password. Try again.' });
+      db.prepare('INSERT INTO users (username, password) VALUES (?, ?)').run(trimmedUser, password);
+      return res.status(201).json({ success: true, username: trimmedUser });
     }
-  });
+  } catch (err) {
+    return res.status(500).json({ error: 'Authentication internal error.' });
+  }
 };
 
+// (Keep your getChatHistory function exactly as it was below)
 exports.getChatHistory = (req, res) => {
   Message.getAll((err, messages) => {
     if (err) return res.status(500).json({ error: 'Failed to retrieve chat history.' });

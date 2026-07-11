@@ -2,21 +2,24 @@ const db = require('../config/db');
 
 const Message = {
   create: (username, text, callback) => {
-    const query = `INSERT INTO messages (username, text) VALUES (?, ?)`;
-    db.run(query, [username, text], function (err) {
-      if (err) return callback(err);
-      // Fetch the newly created message to get the default timestamp
-      db.get(`SELECT * FROM messages WHERE id = ?`, [this.lastID], (err, row) => {
-        callback(err, row);
-      });
-    });
+    try {
+      const insert = db.prepare('INSERT INTO messages (username, text) VALUES (?, ?)');
+      const result = insert.run(username, text);
+
+      const newMessage = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
+      callback(null, newMessage);
+    } catch (err) {
+      callback(err, null);
+    }
   },
 
   getAll: (callback) => {
-    const query = `SELECT * FROM messages ORDER BY timestamp ASC`;
-    db.all(query, [], (err, rows) => {
-      callback(err, rows);
-    });
+    try {
+      const rows = db.prepare('SELECT * FROM messages ORDER BY timestamp ASC').all();
+      callback(null, rows);
+    } catch (err) {
+      callback(err, null);
+    }
   }
 };
 
